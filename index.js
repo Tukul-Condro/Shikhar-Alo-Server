@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json())
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.4bs6y.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -42,29 +42,106 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     })
+    app.get('/users', async (req,res)=>{
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    })
 
     // Employee Works relaterd api
-    app.post('/addWorks', async (req, res) =>{
+    // add new work
+    app.post('/works', async (req, res) =>{
       const work = req.body;
       const result = await workCollection.insertOne(work);
       res.send(result);
     })
 
-  app.get('/works/:email', async (req, res) =>{
-  try {
-    const email = req.params.email;
+  // Get works for a specific employee
+    app.get('/works/:email', async (req, res) =>{
+      try {
+        const email = req.params.email;
 
-    const result = await workCollection
-      .find({ email: email })
-      .sort({ date: -1 })
-      .toArray();
+        const result = await workCollection
+          .find({ email: email })
+          .sort({ date: -1 })
+          .toArray();
 
-    res.send(result);
+        res.send(result);
 
-  } catch (error) {
-    res.status(500).send({ message: "Failed to get works" });
-  }
-});
+      } catch (error) {
+        res.status(500).send({ message: "Failed to get works" });
+      }
+    });
+
+    // Update work by ID
+//     app.put('/works/:id', async (req, res) => {
+
+//   try {
+
+//     const id = req.params.id;
+
+//     console.log("Updating ID:", id);
+
+//     const filter = { _id: new ObjectId(id) };
+//     const doc = req.body;
+//     const updatedDoc = {
+//       $set: {
+//         task: doc.task,
+//         workHour: doc.workHour,
+//         date: doc.date,
+//       }
+//     };
+
+//     const result = await workCollection.updateOne(
+//       filter,
+//       updatedDoc
+//     );
+
+//     res.send(result);
+
+//   } catch (error) {
+
+//     console.log("UPDATE ERROR:", error);
+
+//     res.status(500).send({
+//       message:"Failed to update",
+//       error:error.message
+//     });
+
+//   }
+
+// });
+    //     app.put('/works/:id', async (req, res) => {
+    //   const { id } = req.params;
+    //   const updatedWork = req.body; // { task, workHour, date, name, email }
+    //   try {
+    //     const result = await workCollection.updateOne(
+    //       { _id: new ObjectId(id) },
+    //       { $set: updatedWork }
+    //     );
+    //     res.send(result); // result.modifiedCount will be 1 if updated
+    //   } catch (err) {
+    //     console.error(err);
+    //     res.status(500).send({ error: 'Failed to update work' });
+    //   }
+    // });
+    app.get('/works/:id',async (res,req)=>{
+      const id = res.params.id;
+      const query = {_id : new ObjectId(id)}
+      const result = await workCollection.findOne(query);
+      res.sen(result)
+    })
+    // Delete work by ID
+    app.delete('/works/:id', async (req, res) => {
+      const { id } = req.params;
+
+      try {
+        const result = await workCollection.deleteOne({ _id: new ObjectId(id) });
+        res.send(result); // result.deletedCount will be 1 if deleted
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: 'Failed to delete work' });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
