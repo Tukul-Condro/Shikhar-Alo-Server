@@ -23,133 +23,98 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+      // Connect the client to the server	(optional starting in v4.7)
+      await client.connect();
 
-    const userCollection = client.db("ShikharAloDB").collection("users");
-    const workCollection = client.db("ShikharAloDB").collection("works");
+      const userCollection = client.db("ShikharAloDB").collection("users");
+      const workCollection = client.db("ShikharAloDB").collection("works");
 
-    // users api
-    app.post('/users', async(req, res) =>{
-      const user = req.body;
-      // insert email if user dosen't exists:
-      // you can do this many ways(1. email unique 2. upsert 3. simple checking)
-      const query = {email : user.email}
-      const existingUser = await userCollection.findOne(query);
-      if(existingUser){
-        return res.send({message: 'user already exists', insertedId : null})
-      }
-      const result = await userCollection.insertOne(user);
-      res.send(result);
-    })
-    app.get('/users', async (req,res)=>{
-      const result = await userCollection.find().toArray();
-      res.send(result);
-    })
+      // --------------users api---------------
+      app.post('/users', async(req, res) =>{
+        const user = req.body;
+        // insert email if user dosen't exists:
+        // you can do this many ways(1. email unique 2. upsert 3. simple checking)
+        const query = {email : user.email}
+        const existingUser = await userCollection.findOne(query);
+        if(existingUser){
+          return res.send({message: 'user already exists', insertedId : null})
+        }
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      })
+      app.get('/users', async (req,res)=>{
+        const result = await userCollection.find().toArray();
+        res.send(result);
+      })
 
-    // Employee Works relaterd api
-    // add new work
-    app.post('/works', async (req, res) =>{
-      const work = req.body;
-      const result = await workCollection.insertOne(work);
-      res.send(result);
-    })
+      // -------------Employee Works relaterd api-----------
+      // add new work
+      app.post('/works', async (req, res) =>{
+        const work = req.body;
+        const result = await workCollection.insertOne(work);
+        res.send(result);
+      })
 
-  // Get works for a specific employee
-    app.get('/works/:email', async (req, res) =>{
-      try {
-        const email = req.params.email;
+    // Get works for a specific employee
+      app.get('/works', async (req, res) => {
+        const  email = req.query.email;
+        const query = {email: email};
+        const result = await workCollection.find(query).toArray();
+        res.send(result);
+      })
 
-        const result = await workCollection
-          .find({ email: email })
-          .sort({ date: -1 })
-          .toArray();
+      // app.get('/works/:id',async (res,req)=>{
+      //   const id = res.params.id;
+      //   const query = {_id : new ObjectId(id)}
+      //   const result = await workCollection.findOne(query);
+      //   res.sen(result)
+      // })
+      // Update work by ID
+      app.patch("/works/:id", async (req,res)=>{
+      try{
+        const id = req.params.id;
+        const updateData = req.body;
+        const query = { _id: new ObjectId(id)};
+        const updateDoc = {
+            $set:{
+              task:updateData.task,
+              workHour:updateData.workHour,
+              date:updateData.date
+            }
+          };
+        const result = await workCollection.updateOne(query,updateDoc);
+          res.send(result);
+        }catch(err){
+          console.log(err);
+          res.status(500).send({
+            message:"Update Failed"
+          });
+        }
+      });
 
+      // Delete work by ID
+      app.delete('/works/:id', async (req, res) => {
+        const  id  = req.params.id;
+        const query = {_id: new ObjectId(id)}
+        const result = await workCollection.deleteOne(query);
         res.send(result);
 
-      } catch (error) {
-        res.status(500).send({ message: "Failed to get works" });
-      }
-    });
+        // try {
+        //   const result = await workCollection.deleteOne({ _id: new ObjectId(id) });
+        //   res.send(result); // result.deletedCount will be 1 if deleted
+        // } catch (err) {
+        //   console.error(err);
+        //   res.status(500).send({ error: 'Failed to delete work' });
+        // }
+      });
 
-    // Update work by ID
-//     app.put('/works/:id', async (req, res) => {
-
-//   try {
-
-//     const id = req.params.id;
-
-//     console.log("Updating ID:", id);
-
-//     const filter = { _id: new ObjectId(id) };
-//     const doc = req.body;
-//     const updatedDoc = {
-//       $set: {
-//         task: doc.task,
-//         workHour: doc.workHour,
-//         date: doc.date,
-//       }
-//     };
-
-//     const result = await workCollection.updateOne(
-//       filter,
-//       updatedDoc
-//     );
-
-//     res.send(result);
-
-//   } catch (error) {
-
-//     console.log("UPDATE ERROR:", error);
-
-//     res.status(500).send({
-//       message:"Failed to update",
-//       error:error.message
-//     });
-
-//   }
-
-// });
-    //     app.put('/works/:id', async (req, res) => {
-    //   const { id } = req.params;
-    //   const updatedWork = req.body; // { task, workHour, date, name, email }
-    //   try {
-    //     const result = await workCollection.updateOne(
-    //       { _id: new ObjectId(id) },
-    //       { $set: updatedWork }
-    //     );
-    //     res.send(result); // result.modifiedCount will be 1 if updated
-    //   } catch (err) {
-    //     console.error(err);
-    //     res.status(500).send({ error: 'Failed to update work' });
-    //   }
-    // });
-    app.get('/works/:id',async (res,req)=>{
-      const id = res.params.id;
-      const query = {_id : new ObjectId(id)}
-      const result = await workCollection.findOne(query);
-      res.sen(result)
-    })
-    // Delete work by ID
-    app.delete('/works/:id', async (req, res) => {
-      const { id } = req.params;
-
-      try {
-        const result = await workCollection.deleteOne({ _id: new ObjectId(id) });
-        res.send(result); // result.deletedCount will be 1 if deleted
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ error: 'Failed to delete work' });
-      }
-    });
-
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
-  }
+      // Send a ping to confirm a successful connection
+      await client.db("admin").command({ ping: 1 });
+      console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  }finally {
+      // Ensures that the client will close when you finish/error
+      // await client.close();
+    }
 }
 run().catch(console.dir);
 
