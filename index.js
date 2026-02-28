@@ -58,17 +58,14 @@ async function run() {
     // Get works for a specific employee
       app.get('/works', async (req, res) => {
         const  email = req.query.email;
-        const query = {email: email};
+        let query = {};
+        if(email){
+           query = {email: email};
+        }
         const result = await workCollection.find(query).toArray();
         res.send(result);
       })
-
-      // app.get('/works/:id',async (res,req)=>{
-      //   const id = res.params.id;
-      //   const query = {_id : new ObjectId(id)}
-      //   const result = await workCollection.findOne(query);
-      //   res.sen(result)
-      // })
+      
       // Update work by ID
       app.patch("/works/:id", async (req,res)=>{
       try{
