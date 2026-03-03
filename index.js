@@ -23,14 +23,16 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-      // Connect the client to the server	(optional starting in v4.7)
-      await client.connect();
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
 
-      const userCollection = client.db("ShikharAloDB").collection("users");
-      const workCollection = client.db("ShikharAloDB").collection("works");
+    const userCollection = client.db("ShikharAloDB").collection("users");
+    const workCollection = client.db("ShikharAloDB").collection("works");
+    const payrollCollection = client.db("ShikharAloDB").collection("payroll");
 
-      // --------------users api---------------
-      app.post('/users', async(req, res) =>{
+    // --------------users api---------------
+    // add new user basd on exists email
+    app.post('/users', async(req, res) =>{
         const user = req.body;
         // insert email if user dosen't exists:
         // you can do this many ways(1. email unique 2. upsert 3. simple checking)
@@ -42,21 +44,30 @@ async function run() {
         const result = await userCollection.insertOne(user);
         res.send(result);
       })
-      app.get('/users', async (req,res)=>{
+
+    // get all users data
+    app.get('/users', async (req,res)=>{
         const result = await userCollection.find().toArray();
         res.send(result);
       })
 
+    // get single user data
+    app.get('user/:id', async(req,res) =>{
+      const id = req.params.id;
+      const result = await userCollection.findOne({_id: new ObjectId(id)});
+      res.send(result);
+    })
+
       // -------------Employee Works relaterd api-----------
       // add new work
-      app.post('/works', async (req, res) =>{
+    app.post('/works', async (req, res) =>{
         const work = req.body;
         const result = await workCollection.insertOne(work);
         res.send(result);
       })
 
     // Get works for a specific employee
-      app.get('/works', async (req, res) => {
+    app.get('/works', async (req, res) => {
         const  email = req.query.email;
         let query = {};
         if(email){
@@ -67,7 +78,7 @@ async function run() {
       })
       
       // Update work by ID
-      app.patch("/works/:id", async (req,res)=>{
+    app.patch("/works/:id", async (req,res)=>{
       try{
         const id = req.params.id;
         const updateData = req.body;
@@ -90,20 +101,46 @@ async function run() {
       });
 
       // Delete work by ID
-      app.delete('/works/:id', async (req, res) => {
+    app.delete('/works/:id', async (req, res) => {
         const  id  = req.params.id;
         const query = {_id: new ObjectId(id)}
         const result = await workCollection.deleteOne(query);
         res.send(result);
-
-        // try {
-        //   const result = await workCollection.deleteOne({ _id: new ObjectId(id) });
-        //   res.send(result); // result.deletedCount will be 1 if deleted
-        // } catch (err) {
-        //   console.error(err);
-        //   res.status(500).send({ error: 'Failed to delete work' });
-        // }
       });
+
+      //------------------- payment by HR related api --------------------
+// make payment  api 
+    app.post('/payroll', async(req, res) =>{
+      const payroll = req.body;
+      const result = await payrollCollection.insertOne(payroll);
+      res.send(result)
+    })
+
+    app.get('/payroll/:employeeId', async(req, res) =>{
+      const employeeId = req.params.employeeId;
+      const result = await payrollCollection.find({employeeId: employeeId}).sort({year: 1, month: 1}).toArray();
+      res.send(result);
+    })
+
+  // verifief employee by HR
+  app.patch('/users/:id/verify', async(req, res) =>{
+      try{
+        const id = req.params.id;
+        const user = await userCollection.findOne({_id: new ObjectId(id)});
+      
+      const currentStatus = user?.isVerified || false;
+
+      const updateStatus = !currentStatus;
+      const result = await userCollection.updateOne({_id: new ObjectId(id)}, { $set: {isVerified: updateStatus }});
+      res.send({
+        modifiedCount: result.modifiedCount,
+        isVerified: updateStatus
+      });
+      } catch(err){
+        console.log(err);
+        res.status(500).send({ message: "Failed to update verification" })
+      }
+  }) 
 
       // Send a ping to confirm a successful connection
       await client.db("admin").command({ ping: 1 });
