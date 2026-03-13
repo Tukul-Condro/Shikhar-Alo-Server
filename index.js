@@ -52,13 +52,25 @@ async function run() {
       })
 
     // get single user data
-    app.get('user/:id', async(req,res) =>{
+    app.get('/users/:id', async(req,res) =>{
       const id = req.params.id;
       const result = await userCollection.findOne({_id: new ObjectId(id)});
       res.send(result);
     })
+    // get user by email (for login check)
+    app.get('/users/email/:email', async (req, res) => {
+      const email = req.params.email;
+      try {
+        const user = await userCollection.findOne({ email });
+        if (!user) return res.status(404).send({ error: "User not found" });
+        res.send(user);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch user" });
+      }
+    });
 
-      // -------------Employee Works relaterd api-----------
+                // -------------Employee Works relaterd api-----------
       // add new work
     app.post('/works', async (req, res) =>{
         const work = req.body;
@@ -108,18 +120,47 @@ async function run() {
         res.send(result);
       });
 
-      //------------------- payment by HR related api --------------------
-// make payment  api 
+               //------------------- payment by HR related api --------------------
+// make payment  api and check duplicate month
     app.post('/payroll', async(req, res) =>{
       const payroll = req.body;
+      
+      const query ={
+        email: payroll.email,
+        month: payroll.month,
+        year: payroll.year
+      }
+      // check duplicate payment
+      const existing = await payrollCollection.findOne(query);
+      if (existing) {
+        return res.send({
+          success: false,
+          message: "Salary already requested for this month"
+        });
+      }
+
       const result = await payrollCollection.insertOne(payroll);
-      res.send(result)
+      res.send({ success: true, result })
     })
 
-    app.get('/payroll/:employeeId', async(req, res) =>{
-      const employeeId = req.params.employeeId;
-      const result = await payrollCollection.find({employeeId: employeeId}).sort({year: 1, month: 1}).toArray();
+    app.get('/payroll', async(req, res) => {
+      const result = await payrollCollection.find().toArray();
       res.send(result);
+    })
+
+    app.get('/payroll/:id', async(req, res) =>{
+      try {
+    const id = req.params.id; // get employeeId from URL
+    console.log("Searching payroll for employeeId:", id);
+
+    const result = await payrollCollection.find({ employeeId: id }).sort({ year: 1, month: 1, createdAt: -1 }).toArray();
+
+    console.log("Found payroll:", result);
+    res.send(result);
+  } catch (error) {
+    console.error("Error fetching payroll:", error);
+    res.status(500).send({ error: "Failed to fetch payroll" });
+  }
     })
 
   // verifief employee by HR
@@ -142,7 +183,61 @@ async function run() {
       }
   }) 
 
-      // Send a ping to confirm a successful connection
+                 // --------------------ADMIN related api-------------------
+
+// payment paid api by Admin
+app.patch('/payroll/pay/:id', async(req,res) =>{
+  const id = req.params.id;
+  const filter = {_id : new ObjectId(id)};
+  const updateDoc = {
+    $set:{
+      status:'paid',
+      date: new Date()
+    }
+  }
+  const result = await payrollCollection.updateOne(filter, updateDoc)
+  res.send(result);
+})
+
+// adjust salary api
+app.patch('/payroll/salary/:id', async(req, res) =>{
+  const id = req.params.id;
+  const {salary} = req.body;
+  const payroll = await payrollCollection.findOne({_id: new ObjectId(id)});
+    // prevent change if already paid
+  if (payroll.status === "paid") {
+    return res.send({
+      success: false,
+      message: "Salary already paid. Cannot adjust."
+    });
+  }
+  // check salary is less than increas
+  if(salary <= payroll.salary){
+    return res.send({
+      success: false,
+      message: "salary can only be increased"
+    })
+  }
+  const result = await payrollCollection.updateOne( {_id: new ObjectId(id)}, { $set:{salary: salary}} )
+  res.send({success: true, result});
+})
+
+// made fire a user
+app.patch('/users/fire/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    await userCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { fired: true } }
+    );
+    res.send({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: "Failed to fire user" });
+  }
+});
+
+ //-----server connected  message-- Send a ping to confirm a successful connection--------
       await client.db("admin").command({ ping: 1 });
       console.log("Pinged your deployment. You successfully connected to MongoDB!");
   }finally {
