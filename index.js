@@ -51,7 +51,7 @@ async function run() {
         res.send(result);
       })
 
-    // get single user data
+    // get a single user data
     app.get('/users/:id', async(req,res) =>{
       const id = req.params.id;
       const result = await userCollection.findOne({_id: new ObjectId(id)});
@@ -184,6 +184,18 @@ async function run() {
   }) 
 
                  // --------------------ADMIN related api-------------------
+    // make a user is HR
+app.patch('/users/:id', async(req, res) =>{
+  const id = req.params.id;
+  const filter = {_id: new ObjectId(id)};
+  const updateDoc = {
+    $set:{
+      role: 'hr'
+      }
+    } 
+    const result = await userCollection.updateOne(filter, updateDoc);
+    res.send(result);
+    })
 
 // payment paid api by Admin
 app.patch('/payroll/pay/:id', async(req,res) =>{
