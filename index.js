@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require('dotenv').config();
+const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -21,6 +22,28 @@ const client = new MongoClient(uri, {
   }
 });
 
+// JWT MIDDLEWARE FUNCTIONS Verify Token add
+ const verifyToken =(req, res, next) =>{
+
+  const authorization = req.headers['authorization'];
+
+  if(!authorization){
+    return res.status(401).send({error:true,message:'Unauthorizes: no token provided'})
+  }
+  const token = authorization.split(' ')[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET,(err, decoded)=>{
+    if(err){
+      return res.status(403).send({error: true, message:'forbidden access'});
+    }
+    req.decoded = decoded;
+    next();
+  })
+ }
+
+
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -29,6 +52,35 @@ async function run() {
     const userCollection = client.db("ShikharAloDB").collection("users");
     const workCollection = client.db("ShikharAloDB").collection("works");
     const payrollCollection = client.db("ShikharAloDB").collection("payroll");
+
+    //  verifyAmin middleware
+    const verifyAdmin = async (req, res, next) => {
+    const email = req.decoded.email;
+    console.log("Token Email:", email);
+    const user = await userCollection.findOne({ email });
+    console.log("User From DB:", user);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).send({ error: true, message: 'forbidden access' });
+    }
+    next();
+    };
+    // verifyAdminOrHr middleware
+    const verifyAdminOrHr = async (req,res,next) =>{
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({email});
+      if(!user || (user.role !== 'admin' && user.role !== 'hr')){
+        return res.status(403).send({error: true, message:'forbidden access'});
+      }
+      next();
+    }
+
+    // --------------jwt token api---------------
+    app.post('/jwt', (req, res) =>{
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'})
+      res.send({ token });
+    })
+
 
     // --------------users api---------------
     // add new user basd on exists email
@@ -46,13 +98,13 @@ async function run() {
       })
 
     // get all users data
-    app.get('/users', async (req,res)=>{
+    app.get('/users',verifyToken, verifyAdminOrHr, async (req,res)=>{
         const result = await userCollection.find().toArray();
         res.send(result);
       })
 
     // get a single user data
-    app.get('/users/:id', async(req,res) =>{
+    app.get('/users/:id',verifyToken, async(req,res) =>{
       const id = req.params.id;
       const result = await userCollection.findOne({_id: new ObjectId(id)});
       res.send(result);
@@ -71,15 +123,28 @@ async function run() {
     });
 
                 // -------------Employee Works relaterd api-----------
+//  Verify employee middleware
+    app.get('/users/role/:email',verifyToken, async(req, res) =>{
+      const email = req.params.email;
+      if(email !== req.decoded.email ){
+        return res.status(403).send({error: true, message:'forbidden access'})
+      }
+      const user = await userCollection.findOne({ email: email });
+      // res.send({role: user?.role || 'employee'}); 
+      res.send({
+        name:user?.name,
+        role: user?.role || 'employee',
+      })
+    })
       // add new work
-    app.post('/works', async (req, res) =>{
+    app.post('/works',verifyToken, async (req, res) =>{
         const work = req.body;
         const result = await workCollection.insertOne(work);
         res.send(result);
       })
 
     // Get works for a specific employee
-    app.get('/works', async (req, res) => {
+    app.get('/works',verifyToken, async (req, res) => {
         const  email = req.query.email;
         let query = {};
         if(email){
@@ -90,7 +155,7 @@ async function run() {
       })
       
       // Update work by ID
-    app.patch("/works/:id", async (req,res)=>{
+    app.patch("/works/:id",verifyToken, async (req,res)=>{
       try{
         const id = req.params.id;
         const updateData = req.body;
@@ -113,14 +178,24 @@ async function run() {
       });
 
       // Delete work by ID
-    app.delete('/works/:id', async (req, res) => {
+    app.delete('/works/:id',verifyToken, async (req, res) => {
         const  id  = req.params.id;
         const query = {_id: new ObjectId(id)}
         const result = await workCollection.deleteOne(query);
         res.send(result);
       });
 
-               //------------------- payment by HR related api --------------------
+               //-------------------  HR related api --------------------
+// verifyHR middleware
+  const verifyHR = async (req, res, next)=>{
+    const email = req.decoded.email;
+    const user = await userCollection.findOne({ email });
+    if(!user || user.role !== 'hr'){
+      return res.status(403).send({error: true, message:'forbidden access'});
+    }
+    next();
+}
+  
 // make payment  api and check duplicate month
     app.post('/payroll', async(req, res) =>{
       const payroll = req.body;
@@ -164,7 +239,7 @@ async function run() {
     })
 
   // verifief employee by HR
-  app.patch('/users/:id/verify', async(req, res) =>{
+  app.patch('/users/:id/verify',verifyToken, verifyHR, async(req, res) =>{
       try{
         const id = req.params.id;
         const user = await userCollection.findOne({_id: new ObjectId(id)});
@@ -184,8 +259,10 @@ async function run() {
   }) 
 
                  // --------------------ADMIN related api-------------------
+
+
     // make a user is HR
-app.patch('/users/:id', async(req, res) =>{
+app.patch('/users/:id',verifyToken, verifyAdmin, async(req, res) =>{
   const id = req.params.id;
   const filter = {_id: new ObjectId(id)};
   const updateDoc = {
@@ -198,7 +275,7 @@ app.patch('/users/:id', async(req, res) =>{
     })
 
 // payment paid api by Admin
-app.patch('/payroll/pay/:id', async(req,res) =>{
+app.patch('/payroll/pay/:id',verifyToken,verifyAdmin, async(req,res) =>{
   const id = req.params.id;
   const filter = {_id : new ObjectId(id)};
   const updateDoc = {
@@ -212,7 +289,7 @@ app.patch('/payroll/pay/:id', async(req,res) =>{
 })
 
 // adjust salary api
-app.patch('/payroll/salary/:id', async(req, res) =>{
+app.patch('/payroll/salary/:id',verifyToken,verifyAdmin, async(req, res) =>{
   const id = req.params.id;
   const {salary} = req.body;
   const payroll = await payrollCollection.findOne({_id: new ObjectId(id)});
@@ -235,7 +312,7 @@ app.patch('/payroll/salary/:id', async(req, res) =>{
 })
 
 // made fire a user
-app.patch('/users/fire/:id', async (req, res) => {
+app.patch('/users/fire/:id',verifyToken,verifyAdmin, async (req, res) => {
   const id = req.params.id;
   try {
     await userCollection.updateOne(
