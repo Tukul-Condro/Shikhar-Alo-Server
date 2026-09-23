@@ -218,17 +218,26 @@ async function run() {
       res.send({ success: true, result })
     })
 
-    app.get('/payroll', async(req, res) => {
+    app.get('/payroll', verifyToken, async(req, res) => {
       const result = await payrollCollection.find().toArray();
       res.send(result);
     })
 
-    app.get('/payroll/:id', async(req, res) =>{
+    app.get('/payroll/:email', verifyToken, async(req, res) =>{
       try {
-    const id = req.params.id; // get employeeId from URL
-    console.log("Searching payroll for employeeId:", id);
+    // const id = req.params.id; // get employeeId from URL
+    const email = req.params.email;
 
-    const result = await payrollCollection.find({ employeeId: id }).sort({ year: 1, month: 1, createdAt: -1 }).toArray();
+    // অন্য user-এর payroll দেখতে না পারে
+    if (email !== req.decoded.email) {
+      return res.status(403).send({
+        error: true,
+        message: "forbidden access"
+      });
+    }
+    console.log("Searching payroll for employeeId:", email);
+
+    const result = await payrollCollection.find({ email: email }).sort({ year: 1, month: 1, createdAt: -1 }).toArray();
 
     console.log("Found payroll:", result);
     res.send(result);
