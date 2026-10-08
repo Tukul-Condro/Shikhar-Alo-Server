@@ -47,7 +47,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db("ShikharAloDB").collection("users");
     const workCollection = client.db("ShikharAloDB").collection("works");
@@ -56,9 +56,9 @@ async function run() {
     //  verifyAmin middleware
     const verifyAdmin = async (req, res, next) => {
     const email = req.decoded.email;
-    console.log("Token Email:", email);
+    // console.log("Token Email:", email);
     const user = await userCollection.findOne({ email });
-    console.log("User From DB:", user);
+    // console.log("User From DB:", user);
     if (!user || user.role !== 'admin') {
       return res.status(403).send({ error: true, message: 'forbidden access' });
     }
@@ -84,18 +84,46 @@ async function run() {
 
     // --------------users api---------------
     // add new user basd on exists email
-    app.post('/users', async(req, res) =>{
+    app.post('/users', async (req, res) => {
+      try {
         const user = req.body;
-        // insert email if user dosen't exists:
-        // you can do this many ways(1. email unique 2. upsert 3. simple checking)
-        const query = {email : user.email}
+
+        const query = { email: user.email };
+
         const existingUser = await userCollection.findOne(query);
-        if(existingUser){
-          return res.send({message: 'user already exists', insertedId : null})
+
+        if (existingUser) {
+          return res.send({
+            message: 'user already exists',
+            insertedId: null
+          });
         }
+
         const result = await userCollection.insertOne(user);
+
         res.send(result);
-      })
+
+      } catch (error) {
+        // console.error('POST /users ERROR:', error);
+
+        res.status(500).send({
+          message: 'Internal Server Error',
+          error: error.message
+        });
+      }
+    });
+    // app.post('/users', async(req, res) =>{
+    //     const user = req.body;
+    //     // insert email if user dosen't exists:
+    //     // you can do this many ways(1. email unique 2. upsert 3. simple checking)
+    //     const query = {email : user.email}
+    //     const existingUser = await userCollection.findOne(query);
+    //     if(existingUser){
+    //       return res.send({message: 'user already exists', insertedId : null})
+    //     }
+    //     const result = await userCollection.insertOne(user);
+    //     res.send(result);
+    //   })
 
     // get all users data
     app.get('/users',verifyToken, verifyAdminOrHr, async (req,res)=>{
@@ -117,7 +145,7 @@ async function run() {
         if (!user) return res.status(404).send({ error: "User not found" });
         res.send(user);
       } catch (err) {
-        console.error(err);
+        // console.error(err);
         res.status(500).send({ error: "Failed to fetch user" });
       }
     });
@@ -170,7 +198,7 @@ async function run() {
         const result = await workCollection.updateOne(query,updateDoc);
           res.send(result);
         }catch(err){
-          console.log(err);
+          // console.log(err);
           res.status(500).send({
             message:"Update Failed"
           });
@@ -223,28 +251,36 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/payroll/:email', verifyToken, async(req, res) =>{
+    // get employee details by employeeId
+    app.get('/payroll/:id', verifyToken, async(req, res) =>{
       try {
-    // const id = req.params.id; // get employeeId from URL
-    const email = req.params.email;
+    const id = req.params.id; // get employeeId from URL
 
-    // অন্য user-এর payroll দেখতে না পারে
+    const result = await payrollCollection.find({ employeeId: id }).sort({ year: 1, month: 1, createdAt: -1 }).toArray();
+    res.send(result);
+    } catch (error) {
+      // console.error("Error fetching payroll:", error);
+      res.status(500).send({ error: "Failed to fetch payroll" });
+    }
+    })
+
+    //get employee payment history by email
+    app.get('/payroll/employee/:email', verifyToken, async(req, res) =>{
+      try {
+    const email = req.params.email;
+    
     if (email !== req.decoded.email) {
       return res.status(403).send({
         error: true,
         message: "forbidden access"
       });
     }
-    console.log("Searching payroll for employeeId:", email);
 
     const result = await payrollCollection.find({ email: email }).sort({ year: 1, month: 1, createdAt: -1 }).toArray();
-
-    console.log("Found payroll:", result);
     res.send(result);
-  } catch (error) {
-    console.error("Error fetching payroll:", error);
-    res.status(500).send({ error: "Failed to fetch payroll" });
-  }
+    } catch (error) {
+      res.status(500).send({ error: "Failed to fetch payroll" });
+    }
     })
 
   // verifief employee by HR
@@ -262,7 +298,7 @@ async function run() {
         isVerified: updateStatus
       });
       } catch(err){
-        console.log(err);
+        // console.log(err);
         res.status(500).send({ message: "Failed to update verification" })
       }
   }) 
@@ -330,14 +366,14 @@ app.patch('/users/fire/:id',verifyToken,verifyAdmin, async (req, res) => {
     );
     res.send({ success: true });
   } catch (err) {
-    console.error(err);
+    // console.error(err);
     res.status(500).send({ error: "Failed to fire user" });
   }
 });
 
  //-----server connected  message-- Send a ping to confirm a successful connection--------
-      await client.db("admin").command({ ping: 1 });
-      console.log("Pinged your deployment. You successfully connected to MongoDB!");
+      // await client.db("admin").command({ ping: 1 });
+      // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   }finally {
       // Ensures that the client will close when you finish/error
       // await client.close();
@@ -351,5 +387,5 @@ app.get('/', (req,res)=>{
 })
 
 app.listen(port, ()=>{
-    console.log(`Shikhar Alo is sitting on port ${port}`);
+    // console.log(`Shikhar Alo is sitting on port ${port}`);
 })
